@@ -77,7 +77,6 @@ impl CPU {
 
     pub fn step(&mut self) -> Result<ExecutionStatus> {
         let opcode = self.read_pc();
-        println!("PC: {:04X}", self.pc);
 
         match opcode {
             // Misc/control instructions
@@ -85,30 +84,28 @@ impl CPU {
             0x76 => return Ok(ExecutionStatus::Halt),                   // HLT
             0xD3 => {                                                   // OUT   d8
                 self.read_pc();
-                todo!();
             }
             0xDB => {                                                   // IN    d8
                 self.read_pc();
-                todo!();
             }
 
             0xF3 => self.interrupt_status = InterruptStatus::Disabled,  // DI
             0xFB => self.interrupt_status = InterruptStatus::Enabled,   // EI
 
             // Jumps/calls
-            0xC0 => if self.flag(ZERO_FLAG) == 0 { self.ret(); }        // RNZ
-            0xD0 => if self.flag(CARRY_FLAG) == 0 { self.ret(); }       // RNC
-            0xE0 => if self.flag(PARITY_FLAG) == 0 { self.ret(); }      // RPO
-            0xF0 => if self.flag(SIGN_FLAG) == 0 { self.ret(); }        // RP
-            0xC2 => if self.flag(ZERO_FLAG) == 0 { self.jmp() }         // JNZ   a16
-            0xD2 => if self.flag(CARRY_FLAG) == 0 { self.jmp() }        // JNC   a16
-            0xE2 => if self.flag(PARITY_FLAG) == 0 { self.jmp() }       // JPO   a16
-            0xF2 => if self.flag(SIGN_FLAG) == 0 { self.jmp() }         // JP    a16
+            0xC0 => if self.flag(ZERO_FLAG) == 0 { self.ret() }         // RNZ
+            0xD0 => if self.flag(CARRY_FLAG) == 0 { self.ret() }        // RNC
+            0xE0 => if self.flag(PARITY_FLAG) == 0 { self.ret() }       // RPO
+            0xF0 => if self.flag(SIGN_FLAG) == 0 { self.ret() }         // RP
+            0xC2 => self.jmp_if_not(ZERO_FLAG),                         // JNZ   a16
+            0xD2 => self.jmp_if_not(CARRY_FLAG),                        // JNC   a16
+            0xE2 => self.jmp_if_not(PARITY_FLAG),                       // JPO   a16
+            0xF2 => self.jmp_if_not(SIGN_FLAG),                         // JP    a16
             0xC3 | 0xCB => self.pc = self.read_pc_u16(),                // JMP   a16
-            0xC4 => if self.flag(ZERO_FLAG) == 0 { self.call(); }       // CNZ   a16
-            0xD4 => if self.flag(CARRY_FLAG) == 0 { self.call(); }      // CNC   a16
-            0xE4 => if self.flag(PARITY_FLAG) == 0 { self.call(); }     // CPO   a16
-            0xF4 => if self.flag(SIGN_FLAG) == 0 { self.call(); }       // CP    a16
+            0xC4 => self.call_if_not(ZERO_FLAG),                        // CNZ   a16
+            0xD4 => self.call_if_not(CARRY_FLAG),                       // CNC   a16
+            0xE4 => self.call_if_not(PARITY_FLAG),                      // CPO   a16
+            0xF4 => self.call_if_not(SIGN_FLAG),                        // CP    a16
             0xC7 => self.rst(0),                                        // RST   0
             0xCF => self.rst(1),                                        // RST   1
             0xD7 => self.rst(2),                                        // RST   2
@@ -117,25 +114,28 @@ impl CPU {
             0xEF => self.rst(5),                                        // RST   5
             0xF7 => self.rst(6),                                        // RST   6
             0xFF => self.rst(7),                                        // RST   7
-            0xC8 => if self.flag(ZERO_FLAG) != 0 { self.ret(); }        // RZ
-            0xD8 => if self.flag(CARRY_FLAG) != 0 { self.ret(); }       // RC
-            0xE8 => if self.flag(PARITY_FLAG) != 0 { self.ret(); }      // RPE
-            0xF8 => if self.flag(SIGN_FLAG) != 0 { self.ret(); }        // RM
-            0xC9 | 0xD9 => self.ret(),                                  // RET   a16
+            0xC8 => if self.flag(ZERO_FLAG) != 0 { self.ret() }         // RZ
+            0xD8 => if self.flag(CARRY_FLAG) != 0 { self.ret() }        // RC
+            0xE8 => if self.flag(PARITY_FLAG) != 0 { self.ret() }       // RPE
+            0xF8 => if self.flag(SIGN_FLAG) != 0 { self.ret() }         // RM
+            0xC9 | 0xD9 => self.ret(),                                  // RET
             0xE9 => self.pc = concat_u16!(self.h, self.l),              // PCHL
-            0xCA => if self.flag(ZERO_FLAG) != 0 { self.jmp() }         // JZ    a16
-            0xDA => if self.flag(CARRY_FLAG) != 0 { self.jmp() }        // JC    a16
-            0xEA => if self.flag(PARITY_FLAG) != 0 { self.jmp() }       // JPE   a16
-            0xFA => if self.flag(SIGN_FLAG) != 0 { self.jmp() }         // JM    a16
-            0xCC => if self.flag(ZERO_FLAG) != 0 { self.call(); }       // CZ    a16
-            0xDC => if self.flag(CARRY_FLAG) != 0 { self.call(); }      // CC    a16
-            0xEC => if self.flag(PARITY_FLAG) != 0 { self.call(); }     // CPE   a16
-            0xFC => if self.flag(SIGN_FLAG) != 0 { self.call(); }       // CM    a16
-            0xCD | 0xDD | 0xED | 0xFD => self.call(),                   // CALL  a16
+            0xCA => self.jmp_if(ZERO_FLAG),                             // JZ    a16
+            0xDA => self.jmp_if(CARRY_FLAG),                            // JC    a16
+            0xEA => self.jmp_if(PARITY_FLAG),                           // JPE   a16
+            0xFA => self.jmp_if(SIGN_FLAG),                             // JM    a16
+            0xCC => self.call_if(ZERO_FLAG),                            // CZ    a16
+            0xDC => self.call_if(CARRY_FLAG),                           // CC    a16
+            0xEC => self.call_if(PARITY_FLAG),                          // CPE   a16
+            0xFC => self.call_if(SIGN_FLAG),                            // CM    a16
+            0xCD | 0xDD | 0xED | 0xFD => {                              // CALL  a16
+                let adr = self.read_pc_u16();
+                self.call(adr);
+            }
 
             // 8-bit load/store/move instructions
-            0x12 => *self.de_mut() = self.a,                            // STAX  D
-            0x02 => *self.bc_mut() = self.a,                            // STAX  B
+            0x12 => *self.de_val_mut() = self.a,                        // STAX  D
+            0x02 => *self.bc_val_mut() = self.a,                        // STAX  B
             0x32 => {                                                   // STA   a16
                 let adr = self.read_pc_u16();
                 self.memory[adr] = self.a;
@@ -146,10 +146,10 @@ impl CPU {
             0x1E => self.e = self.read_pc(),                            // MVI   E,d8
             0x26 => self.h = self.read_pc(),                            // MVI   H,d8
             0x2E => self.l = self.read_pc(),                            // MVI   L,d8
-            0x36 => *self.m_mut() = self.read_pc(),                     // MVI   M,d8
+            0x36 => *self.m_val_mut() = self.read_pc(),                 // MVI   M,d8
             0x3E => self.a = self.read_pc(),                            // MVI   A,d8
-            0x0A => self.a = self.bc(),                                 // LDAX  B
-            0x1A => self.a = self.de(),                                 // LDAX  D
+            0x0A => self.a = self.bc_val(),                             // LDAX  B
+            0x1A => self.a = self.de_val(),                             // LDAX  D
             0x3A => {                                                   // LDA   a16
                 let adr = self.read_pc_u16();
                 self.a = self.memory[adr];
@@ -160,7 +160,7 @@ impl CPU {
             0x43 => self.b = self.e,                                    // MOV   B,E
             0x44 => self.b = self.h,                                    // MOV   B,H
             0x45 => self.b = self.l,                                    // MOV   B,L
-            0x46 => self.b = self.m(),                                  // MOV   B,M
+            0x46 => self.b = self.m_val(),                              // MOV   B,M
             0x47 => self.b = self.a,                                    // MOV   B,A
             0x48 => self.c = self.b,                                    // MOV   C,B
             0x49 => self.c = self.c,                                    // MOV   C,C
@@ -168,7 +168,7 @@ impl CPU {
             0x4B => self.c = self.e,                                    // MOV   C,E
             0x4C => self.c = self.h,                                    // MOV   C,H
             0x4D => self.c = self.l,                                    // MOV   C,L
-            0x4E => self.c = self.m(),                                  // MOV   C,M
+            0x4E => self.c = self.m_val(),                              // MOV   C,M
             0x4F => self.c = self.a,                                    // MOV   C,A
             0x50 => self.d = self.b,                                    // MOV   D,B
             0x51 => self.d = self.c,                                    // MOV   D,C
@@ -176,7 +176,7 @@ impl CPU {
             0x53 => self.d = self.e,                                    // MOV   D,E
             0x54 => self.d = self.h,                                    // MOV   D,H
             0x55 => self.d = self.l,                                    // MOV   D,L
-            0x56 => self.d = self.m(),                                  // MOV   D,M
+            0x56 => self.d = self.m_val(),                              // MOV   D,M
             0x57 => self.d = self.a,                                    // MOV   D,A
             0x58 => self.e = self.b,                                    // MOV   E,B
             0x59 => self.e = self.c,                                    // MOV   E,C
@@ -184,7 +184,7 @@ impl CPU {
             0x5B => self.e = self.e,                                    // MOV   E,E
             0x5C => self.e = self.h,                                    // MOV   E,H
             0x5D => self.e = self.l,                                    // MOV   E,L
-            0x5E => self.e = self.m(),                                  // MOV   E,M
+            0x5E => self.e = self.m_val(),                              // MOV   E,M
             0x5F => self.e = self.a,                                    // MOV   E,A
             0x60 => self.h = self.b,                                    // MOV   H,B
             0x61 => self.h = self.c,                                    // MOV   H,C
@@ -192,7 +192,7 @@ impl CPU {
             0x63 => self.h = self.e,                                    // MOV   H,E
             0x64 => self.h = self.h,                                    // MOV   H,H
             0x65 => self.h = self.l,                                    // MOV   H,L
-            0x66 => self.h = self.m(),                                  // MOV   H,M
+            0x66 => self.h = self.m_val(),                              // MOV   H,M
             0x67 => self.h = self.a,                                    // MOV   H,A
             0x68 => self.l = self.b,                                    // MOV   L,B
             0x69 => self.l = self.c,                                    // MOV   L,C
@@ -200,22 +200,22 @@ impl CPU {
             0x6B => self.l = self.e,                                    // MOV   L,E
             0x6C => self.l = self.h,                                    // MOV   L,H
             0x6D => self.l = self.l,                                    // MOV   L,L
-            0x6E => self.l = self.m(),                                  // MOV   L,M
+            0x6E => self.l = self.m_val(),                              // MOV   L,M
             0x6F => self.l = self.a,                                    // MOV   L,A
-            0x70 => *self.m_mut() = self.b,                             // MOV   M,B
-            0x71 => *self.m_mut() = self.c,                             // MOV   M,C
-            0x72 => *self.m_mut() = self.d,                             // MOV   M,D
-            0x73 => *self.m_mut() = self.e,                             // MOV   M,E
-            0x74 => *self.m_mut() = self.h,                             // MOV   M,H
-            0x75 => *self.m_mut() = self.l,                             // MOV   M,L
-            0x77 => *self.m_mut() = self.a,                             // MOV   M,A
+            0x70 => *self.m_val_mut() = self.b,                         // MOV   M,B
+            0x71 => *self.m_val_mut() = self.c,                         // MOV   M,C
+            0x72 => *self.m_val_mut() = self.d,                         // MOV   M,D
+            0x73 => *self.m_val_mut() = self.e,                         // MOV   M,E
+            0x74 => *self.m_val_mut() = self.h,                         // MOV   M,H
+            0x75 => *self.m_val_mut() = self.l,                         // MOV   M,L
+            0x77 => *self.m_val_mut() = self.a,                         // MOV   M,A
             0x78 => self.a = self.b,                                    // MOV   A,B
             0x79 => self.a = self.c,                                    // MOV   A,C
             0x7A => self.a = self.d,                                    // MOV   A,D
             0x7B => self.a = self.e,                                    // MOV   A,E
             0x7C => self.a = self.h,                                    // MOV   A,H
             0x7D => self.a = self.l,                                    // MOV   A,L
-            0x7E => self.a = self.m(),                                  // MOV   A,M
+            0x7E => self.a = self.m_val(),                              // MOV   A,M
             0x7F => self.a = self.a,                                    // MOV   A,A
 
             // 16-bit load/store/move instructions
@@ -257,7 +257,7 @@ impl CPU {
             0xF1 => {                                                   // POP   PSW
                 self.flags = self.stack_pop();
                 self.a = self.stack_pop();
-            },
+            }
             0xE3 => {                                                   // XTHL
                 mem::swap(&mut self.h, &mut self.memory[self.sp + 1]);
                 mem::swap(&mut self.l, &mut self.memory[self.sp]);
@@ -277,10 +277,8 @@ impl CPU {
             0xF5 => {                                                   // PUSH  PSW
                 self.stack_push(self.a);
                 self.stack_push(self.flags);
-            },
-            0xF9 => {                                                   // SPHL
-                todo!();
             }
+            0xF9 => self.sp = self.m(),                                 // SPHL
             0xEB => {                                                   // XCHG
                 mem::swap(&mut self.h, &mut self.d);
                 mem::swap(&mut self.l, &mut self.e);
@@ -293,7 +291,7 @@ impl CPU {
             0x1C => self.e = self.inr(self.e),                          // INR   E
             0x24 => self.h = self.inr(self.h),                          // INR   H
             0x2C => self.l = self.inr(self.l),                          // INR   L
-            0x34 => *self.m_mut() = self.inr(self.m()),                 // INR   M
+            0x34 => *self.m_val_mut() = self.inr(self.m_val()),         // INR   M
             0x3C => self.a = self.inr(self.a),                          // INR   A
             0x05 => self.b = self.dcr(self.b),                          // DCR   B
             0x0D => self.c = self.dcr(self.c),                          // DCR   C
@@ -301,7 +299,7 @@ impl CPU {
             0x1D => self.e = self.dcr(self.e),                          // DCR   E
             0x25 => self.h = self.dcr(self.h),                          // DCR   H
             0x2D => self.l = self.dcr(self.l),                          // DCR   L
-            0x35 => *self.m_mut() = self.dcr(self.m()),                 // DCR   M
+            0x35 => *self.m_val_mut() = self.dcr(self.m_val()),         // DCR   M
             0x3D => self.a = self.dcr(self.a),                          // DCR   A
             0x07 => {                                                   // RLC
                 self.set_flag(CARRY_FLAG, self.a & (1 << 7));
@@ -343,7 +341,7 @@ impl CPU {
             0x83 => self.add_a(self.e),                                 // ADD   E
             0x84 => self.add_a(self.h),                                 // ADD   H
             0x85 => self.add_a(self.l),                                 // ADD   L
-            0x86 => self.add_a(self.m()),                               // ADD   M
+            0x86 => self.add_a(self.m_val()),                           // ADD   M
             0x87 => self.add_a(self.a),                                 // ADD   A
             0x88 => self.add_a(self.b + self.flag(CARRY_FLAG)),         // ADC   B
             0x89 => self.add_a(self.c + self.flag(CARRY_FLAG)),         // ADC   C
@@ -351,7 +349,7 @@ impl CPU {
             0x8B => self.add_a(self.e + self.flag(CARRY_FLAG)),         // ADC   E
             0x8C => self.add_a(self.h + self.flag(CARRY_FLAG)),         // ADC   H
             0x8D => self.add_a(self.l + self.flag(CARRY_FLAG)),         // ADC   L
-            0x8E => self.add_a(self.m() + self.flag(CARRY_FLAG)),       // ADC   M
+            0x8E => self.add_a(self.m_val() + self.flag(CARRY_FLAG)),   // ADC   M
             0x8F => self.add_a(self.a + self.flag(CARRY_FLAG)),         // ADC   A
             0x90 => self.sub_a(self.b),                                 // SUB   B
             0x91 => self.sub_a(self.c),                                 // SUB   C
@@ -359,7 +357,7 @@ impl CPU {
             0x93 => self.sub_a(self.e),                                 // SUB   E
             0x94 => self.sub_a(self.h),                                 // SUB   H
             0x95 => self.sub_a(self.l),                                 // SUB   L
-            0x96 => self.sub_a(self.m()),                               // SUB   M
+            0x96 => self.sub_a(self.m_val()),                           // SUB   M
             0x97 => self.sub_a(self.a),                                 // SUB   A
             0x98 => self.sub_a(self.b + self.flag(CARRY_FLAG)),         // ADC   B
             0x99 => self.sub_a(self.c + self.flag(CARRY_FLAG)),         // ADC   C
@@ -367,7 +365,7 @@ impl CPU {
             0x9B => self.sub_a(self.e + self.flag(CARRY_FLAG)),         // ADC   E
             0x9C => self.sub_a(self.h + self.flag(CARRY_FLAG)),         // ADC   H
             0x9D => self.sub_a(self.l + self.flag(CARRY_FLAG)),         // ADC   L
-            0x9E => self.sub_a(self.m() + self.flag(CARRY_FLAG)),       // ADC   M
+            0x9E => self.sub_a(self.m_val() + self.flag(CARRY_FLAG)),   // ADC   M
             0x9F => self.sub_a(self.a + self.flag(CARRY_FLAG)),         // ADC   A
             0xA0 => self.and_a(self.b),                                 // ANA   B
             0xA1 => self.and_a(self.c),                                 // ANA   C
@@ -375,7 +373,7 @@ impl CPU {
             0xA3 => self.and_a(self.e),                                 // ANA   E
             0xA4 => self.and_a(self.h),                                 // ANA   H
             0xA5 => self.and_a(self.l),                                 // ANA   L
-            0xA6 => self.and_a(self.m()),                               // ANA   M
+            0xA6 => self.and_a(self.m_val()),                           // ANA   M
             0xA7 => self.and_a(self.a),                                 // ANA   A
             0xA8 => self.xor_a(self.b),                                 // XRA   B
             0xA9 => self.xor_a(self.c),                                 // XRA   C
@@ -383,7 +381,7 @@ impl CPU {
             0xAB => self.xor_a(self.e),                                 // XRA   E
             0xAC => self.xor_a(self.h),                                 // XRA   H
             0xAD => self.xor_a(self.l),                                 // XRA   L
-            0xAE => self.xor_a(self.m()),                               // XRA   M
+            0xAE => self.xor_a(self.m_val()),                           // XRA   M
             0xAF => self.xor_a(self.a),                                 // XRA   A
             0xB0 => self.or_a(self.b),                                  // ORA   B
             0xB1 => self.or_a(self.c),                                  // ORA   C
@@ -391,7 +389,7 @@ impl CPU {
             0xB3 => self.or_a(self.e),                                  // ORA   E
             0xB4 => self.or_a(self.h),                                  // ORA   H
             0xB5 => self.or_a(self.l),                                  // ORA   L
-            0xB6 => self.or_a(self.m()),                                // ORA   M
+            0xB6 => self.or_a(self.m_val()),                            // ORA   M
             0xB7 => self.or_a(self.a),                                  // ORA   A
             0xB8 => self.cmp_a(self.b),                                 // CMP   B
             0xB9 => self.cmp_a(self.c),                                 // CMP   C
@@ -399,7 +397,7 @@ impl CPU {
             0xBB => self.cmp_a(self.e),                                 // CMP   E
             0xBC => self.cmp_a(self.h),                                 // CMP   H
             0xBD => self.cmp_a(self.l),                                 // CMP   L
-            0xBE => self.cmp_a(self.m()),                               // CMP   M
+            0xBE => self.cmp_a(self.m_val()),                           // CMP   M
             0xBF => self.cmp_a(self.a),                                 // CMP   A
             0xC6 => {                                                   // ADI   d8
                 let d8 = self.read_pc();
@@ -452,27 +450,37 @@ impl CPU {
         Ok(ExecutionStatus::Continue)
     }
 
-    fn call(&mut self) {
+    fn jmp_if(&mut self, flag: u8) {
         let adr = self.read_pc_u16();
-        self.call_adr(adr);
+        if self.flag(flag) != 0 { self.pc = adr; }
     }
 
-    fn rst(&mut self, code: u8) {
-        self.stack_push_u16(self.pc);
-        self.pc = (code << 3) as u16;
-    }
-
-    fn call_adr(&mut self, adr: u16) {
-        self.stack_push_u16(self.pc);
-        self.pc = adr;
+    fn jmp_if_not(&mut self, flag: u8) {
+        let adr = self.read_pc_u16();
+        if self.flag(flag) == 0 { self.pc = adr; }
     }
 
     fn ret(&mut self) {
         self.pc = self.stack_pop_u16();
     }
 
-    fn jmp(&mut self) {
-        self.pc = self.read_pc_u16();
+    fn rst(&mut self, code: u8) {
+        self.call((code as u16) << 3);
+    }
+
+    fn call(&mut self, adr: u16) {
+        self.stack_push_u16(self.pc);
+        self.pc = adr;
+    }
+
+    fn call_if(&mut self, flag: u8) {
+        let adr = self.read_pc_u16();
+        if self.flag(flag) != 0 { self.call(adr); }
+    }
+
+    fn call_if_not(&mut self, flag: u8) {
+        let adr = self.read_pc_u16();
+        if self.flag(flag) == 0 { self.call(adr); }
     }
 
     fn inr(&mut self, val: u8) -> u8 {
@@ -532,13 +540,12 @@ impl CPU {
     }
 
     fn dad(&mut self, hi: u8, lo: u8) {
-        let val = concat_u16!(hi, lo);
-        let hl = concat_u16!(self.h, self.l);
+        let (result_lo, carry_lo) = self.l.overflowing_add(lo);
+        self.l = result_lo;
 
-        let (result, carry) = hl.overflowing_add(val);
-        self.set_flag(CARRY_FLAG, carry as u8);
-        self.h = (result >> 8) as u8;
-        self.l = (result & 0xFF) as u8
+        let (result_hi, carry_hi) = self.h.overflowing_add(hi + carry_lo as u8);
+        self.h = result_hi;
+        self.set_flag(CARRY_FLAG, carry_hi as u8);
     }
 
     fn stack_push(&mut self, val: u8) {
@@ -594,37 +601,34 @@ impl CPU {
         }
     }
 
-    fn m_adr(&self) -> u16 {
+    fn m(&self) -> u16 {
         concat_u16!(self.h, self.l)
     }
 
-    fn bc(&self) -> u8 {
+    fn bc_val(&self) -> u8 {
         let adr = concat_u16!(self.b, self.c);
         self.memory[adr]
     }
 
-    fn bc_mut(&mut self) -> &mut u8 {
+    fn bc_val_mut(&mut self) -> &mut u8 {
         let adr = concat_u16!(self.b, self.c);
         &mut self.memory[adr]
     }
 
-    fn de(&self) -> u8 {
+    fn de_val(&self) -> u8 {
         let adr = concat_u16!(self.d, self.e);
         self.memory[adr]
     }
 
-    fn de_mut(&mut self) -> &mut u8 {
+    fn de_val_mut(&mut self) -> &mut u8 {
         let adr = concat_u16!(self.d, self.e);
         &mut self.memory[adr]
     }
 
-    fn m(&self) -> u8 {
-        let adr = self.m_adr();
-        self.memory[adr]
-    }
+    fn m_val(&self) -> u8 { self.memory[self.m()] }
 
-    fn m_mut(&mut self) -> &mut u8 {
-        let adr = self.m_adr();
+    fn m_val_mut(&mut self) -> &mut u8 {
+        let adr = self.m();
         &mut self.memory[adr]
     }
 }
