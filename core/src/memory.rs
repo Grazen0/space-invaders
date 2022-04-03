@@ -1,6 +1,6 @@
-use std::ops::{Index, IndexMut};
+use std::ops::{Index, IndexMut, Range};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Memory {
     rom: [u8; 0x2000],
     ram: [u8; 0x2000],
@@ -39,10 +39,24 @@ impl IndexMut<u16> for Memory {
         let rom_len = self.rom.len();
         let index = index as usize;
 
-        if index < rom_len {
-            panic!("cannot modify ROM");
-        }
+        if index < rom_len { panic!("cannot write to ROM"); }
 
         &mut self.ram[(index - rom_len) % self.ram.len()]
+    }
+}
+
+impl Index<Range<u16>> for Memory {
+    type Output = [u8];
+
+    fn index(&self, range: Range<u16>) -> &Self::Output {
+        let start = range.start as usize;
+        let end = range.end as usize;
+        let rom_len = self.rom.len();
+
+        if start >= rom_len {
+            &self.ram[start - rom_len..end - rom_len]
+        } else {
+            &self.rom[start..end]
+        }
     }
 }
