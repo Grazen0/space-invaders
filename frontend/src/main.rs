@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 use std::time::{Duration, Instant};
 use colored::Colorize;
 use sdl2::event::Event;
@@ -16,7 +18,7 @@ const FPS: f64 = 60.0;
 const CYCLES_PER_FRAME: u32 = (2_000_000.0 / FPS) as u32;
 
 fn main() {
-    let program = include_bytes!("../invaders");
+    let program = include_bytes!("../assets/invaders");
 
     run(program).unwrap_or_else(|e| {
         eprintln!("{} {}", "Error:".red().bold(), e.to_string().red())
@@ -24,8 +26,8 @@ fn main() {
 }
 
 fn run(program: &[u8]) -> Result<(), String> {
-    let sdl_context = sdl2::init()?;
-    let video_subsystem = sdl_context.video()?;
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
         .window("Space Invaders", (WIDTH as f32 * SCALE_X) as u32, (HEIGHT as f32 * SCALE_Y) as u32)
         .position_centered()
@@ -85,6 +87,7 @@ fn run(program: &[u8]) -> Result<(), String> {
                     ExecutionStatus::Halt => break,
                 }
 
+                // Handle sounds
                 if let Some(event) = emulator.event() {
                     match event {
                         EmulatorEvent::PlaySound(sound) => audio.play(sound),
