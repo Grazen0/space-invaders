@@ -8,3 +8,6 @@ core = { path = "../core" }
 sdl2 = { version = "0.35.2", features = ["bundled", "static-link"] }
 colored = "2.0.0"
 spin_sleep = "1.1.1"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1.12"
