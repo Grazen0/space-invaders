@@ -1,9 +1,42 @@
+use std::mem;
 use crate::{concat_u16, Result, Error, CPU, CPUEvent, Button};
+
+macro_rules! check_sound_events {
+    ( $last_port:expr, $val:expr, $ev:expr, $(($msk:expr,$snd:expr)),* ) => {
+        $(
+            if $val & $msk != 0 && $last_port & $msk == 0 {
+                $ev = Some(Event::PlaySound($snd));
+            } else if $val & $msk == 0 && $last_port & $msk != 0 {
+                $ev = Some(Event::StopSound($snd))
+            }
+        )*
+    };
+}
 
 #[derive(Debug, Clone)]
 pub enum ExecutionStatus {
     Continue(u32),
     Halt,
+}
+
+#[derive(Debug, Clone)]
+pub enum Event {
+    PlaySound(Sound),
+    StopSound(Sound),
+    Debug(u8),
+}
+
+#[derive(Debug, Clone)]
+pub enum Sound {
+    UFO,
+    Shoot,
+    PlayerDie,
+    InvaderDie,
+    Bomp1,
+    Bomp2,
+    Bomp3,
+    Bomp4,
+    UFOExplode,
 }
 
 #[derive(Debug, Clone)]
@@ -14,6 +47,9 @@ pub struct Emulator {
     shift_offset: u8,
     input_1: u8,
     input_2: u8,
+    last_port_3: u8,
+    last_port_5: u8,
+    event: Option<Event>,
 }
 
 impl Emulator {
@@ -25,6 +61,9 @@ impl Emulator {
             shift_offset: 0,
             input_1: 1,
             input_2: 0,
+            last_port_3: 0,
+            last_port_5: 0,
+            event: None,
         }
     }
 
@@ -75,16 +114,41 @@ impl Emulator {
         &mut self.cpu
     }
 
+    pub fn event(&mut self) -> Option<Event> {
+        mem::replace(&mut self.event, None)
+    }
+
     fn write_port(&mut self, port: u8, val: u8) -> Result<()> {
         match port {
             2 => self.shift_offset = val & 0x7,
-            3 => {}
+            3 => {
+                if val != self.last_port_3 {
+                    check_sound_events!(self.last_port_3, val, self.event,
+                        (0x01, Sound::UFO),
+                        (0x02, Sound::Shoot),
+                        (0x04, Sound::PlayerDie),
+                        (0x08, Sound::InvaderDie)
+                    );
+                    self.last_port_3 = val;
+                }
+            }
             4 => {
                 self.shift_lo = self.shift_hi;
                 self.shift_hi = val;
             }
-            5 => {}
-            6 => {}
+            5 => {
+                if val != self.last_port_5 {
+                    check_sound_events!(self.last_port_5, val, self.event,
+                        (0x01, Sound::Bomp1),
+                        (0x02, Sound::Bomp2),
+                        (0x04, Sound::Bomp3),
+                        (0x08, Sound::Bomp4),
+                        (0x10, Sound::UFOExplode)
+                    );
+                    self.last_port_5 = val;
+                }
+            }
+            6 => self.event = Some(Event::Debug(val)),
             _ => return Err(Error::InvalidWritePort { port })
         }
 

@@ -1,4 +1,5 @@
 pub mod input;
+pub mod audio;
 
 use sdl2::keyboard::Mod;
 use sdl2::pixels::Color;

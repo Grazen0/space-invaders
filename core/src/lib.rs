@@ -5,8 +5,8 @@ mod macros;
 mod emulator;
 
 pub use error::{Result, Error};
-pub use cpu::{CPU, CPUEvent};
-pub use emulator::{Emulator, ExecutionStatus};
+pub use cpu::{CPU, Event as CPUEvent};
+pub use emulator::{Emulator, ExecutionStatus, Event as EmulatorEvent, Sound};
 pub use memory::Memory;
 
 #[derive(Debug, Clone)]

@@ -13,7 +13,7 @@ pub enum InterruptStatus {
 }
 
 #[derive(Debug, Clone)]
-pub enum CPUEvent {
+pub enum Event {
     Halt,
     PortWrite(u8, u8),
     PortRead(u8),
@@ -23,7 +23,7 @@ pub enum CPUEvent {
 pub struct CPU {
     pub memory: Memory,
     interrupt_status: InterruptStatus,
-    event: Option<CPUEvent>,
+    event: Option<Event>,
     flags: u8,
     pc: u16,
     sp: u16,
@@ -89,17 +89,17 @@ impl CPU {
             // Misc/control instructions
             0x00 | 0x10 | 0x20 | 0x30 | 0x08 | 0x18 | 0x28 | 0x38 => 1, // NOP
             0x76 => {                                                   // HLT
-                self.event = Some(CPUEvent::Halt);
+                self.event = Some(Event::Halt);
                 1
             }
             0xD3 => {                                                   // OUT   d8
                 let port = self.read_pc();
-                self.event = Some(CPUEvent::PortWrite(port, self.a));
+                self.event = Some(Event::PortWrite(port, self.a));
                 3
             }
             0xDB => {                                                   // IN    d8
                 let port = self.read_pc();
-                self.event = Some(CPUEvent::PortRead(port));
+                self.event = Some(Event::PortRead(port));
                 3
             }
             0xF3 => {                                                   // DI
@@ -631,8 +631,8 @@ impl CPU {
         })
     }
 
-    pub fn event(&mut self) -> Option<CPUEvent> {
-        std::mem::replace(&mut self.event, None)
+    pub fn event(&mut self) -> Option<Event> {
+        mem::replace(&mut self.event, None)
     }
 
     pub fn port_in(&mut self, val: u8) {
