@@ -6,6 +6,16 @@ pub const PARITY_FLAG: u8 = 1 << 2;
 pub const ZERO_FLAG: u8 = 1 << 6;
 pub const SIGN_FLAG: u8 = 1 << 7;
 
+macro_rules! mov {
+    ($from:expr,$to:expr,$cycles:expr) => {
+        {
+            $to = $from;
+            $cycles
+        }
+    };
+    ($from:expr,$to:expr) => { mov!($from, $to, 1) };
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum InterruptStatus {
     Enabled,
@@ -85,6 +95,51 @@ impl CPU {
     pub fn step(&mut self) -> Result<u32> {
         let opcode = self.read_pc();
 
+        macro_rules! mvi {
+            ($to:expr,$cycles:expr) => {
+                {
+                    $to = self.read_pc();
+                    $cycles
+                }
+            };
+            ($to:expr) => { mvi!($to, 2) };
+        }
+
+        macro_rules! ret {
+            () => {
+                {
+                    self.pc = self.stack_pop_u16();
+                    3
+                }
+            };
+            (!$flag:expr) => {
+                if self.flag($flag) == 0 { ret!() } else { 1 }
+            };
+            ($flag:expr) => {
+                if self.flag($flag) != 0 { ret!() } else { 1 }
+            };
+        }
+
+        macro_rules! push {
+            ($hi:expr,$lo:expr) => {
+                {
+                    self.stack_push($hi);
+                    self.stack_push($lo);
+                    3
+                }
+            };
+        }
+
+        macro_rules! pop {
+            ($hi:expr,$lo:expr) => {
+                {
+                    $lo = self.stack_pop();
+                    $hi = self.stack_pop();
+                    3
+                }
+            };
+        }
+
         Ok(match opcode {
             // Misc/control instructions
             0x00 | 0x10 | 0x20 | 0x30 | 0x08 | 0x18 | 0x28 | 0x38 => 1, // NOP
@@ -112,10 +167,10 @@ impl CPU {
             }
 
             // Jumps/calls
-            0xC0 => self.ret_if_not(ZERO_FLAG),                         // RNZ
-            0xD0 => self.ret_if_not(CARRY_FLAG),                        // RNC
-            0xE0 => self.ret_if_not(PARITY_FLAG),                       // RPO
-            0xF0 => self.ret_if_not(SIGN_FLAG),                         // RP
+            0xC0 => ret!(!ZERO_FLAG),                         // RNZ
+            0xD0 => ret!(!CARRY_FLAG),                        // RNC
+            0xE0 => ret!(!PARITY_FLAG),                       // RPO
+            0xF0 => ret!(!SIGN_FLAG),                         // RP
             0xC2 => self.jmp_if_not(ZERO_FLAG),                         // JNZ   a16
             0xD2 => self.jmp_if_not(CARRY_FLAG),                        // JNC   a16
             0xE2 => self.jmp_if_not(PARITY_FLAG),                       // JPO   a16
@@ -136,11 +191,11 @@ impl CPU {
             0xEF => self.rst(5),                                        // RST   5
             0xF7 => self.rst(6),                                        // RST   6
             0xFF => self.rst(7),                                        // RST   7
-            0xC8 => self.ret_if(ZERO_FLAG),                             // RZ
-            0xD8 => self.ret_if(CARRY_FLAG),                            // RC
-            0xE8 => self.ret_if(PARITY_FLAG),                           // RPE
-            0xF8 => self.ret_if(SIGN_FLAG),                             // RM
-            0xC9 | 0xD9 => self.ret(),                                  // RET
+            0xC8 => ret!(ZERO_FLAG),                             // RZ
+            0xD8 => ret!(CARRY_FLAG),                            // RC
+            0xE8 => ret!(PARITY_FLAG),                           // RPE
+            0xF8 => ret!(SIGN_FLAG),                             // RM
+            0xC9 | 0xD9 => ret!(),                                  // RET
             0xE9 => {                                                   // PCHL
                 self.pc = concat_u16!(self.h, self.l);
                 1
@@ -172,38 +227,14 @@ impl CPU {
                 self.memory[adr] = self.a;
                 4
             }
-            0x06 => {                                                   // MVI   B,d8
-                self.b = self.read_pc();
-                2
-            }
-            0x0E => {                                                   // MVI   C,d8
-                self.c = self.read_pc();
-                2
-            }
-            0x16 => {                                                   // MVI   D,d8
-                self.d = self.read_pc();
-                2
-            }
-            0x1E => {                                                   // MVI   E,d8
-                self.e = self.read_pc();
-                2
-            }
-            0x26 => {                                                   // MVI   H,d8
-                self.h = self.read_pc();
-                2
-            }
-            0x2E => {                                                   // MVI   L,d8
-                self.l = self.read_pc();
-                2
-            }
-            0x36 => {                                                   // MVI   M,d8
-                *self.m_val_mut() = self.read_pc();
-                3
-            }
-            0x3E => {                                                   // MVI   A,d8
-                self.a = self.read_pc();
-                2
-            }
+            0x06 => mvi!(self.b),                                                   // MVI   B,d8
+            0x0E => mvi!(self.c),                                                   // MVI   C,d8
+            0x16 => mvi!(self.d),                                                   // MVI   D,d8
+            0x1E => mvi!(self.e),                                                   // MVI   E,d8
+            0x26 => mvi!(self.h),                                                   // MVI   H,d8
+            0x2E => mvi!(self.l),                                                   // MVI   L,d8
+            0x36 => mvi!(*self.m_val_mut(), 3),                                     // MVI   M,d8
+            0x3E => mvi!(self.a),                                                   // MVI   A,d8
             0x0A => {                                                   // LDAX  B
                 self.a = self.bc_val();
                 2
@@ -217,69 +248,69 @@ impl CPU {
                 self.a = self.memory[adr];
                 4
             }
-            0x40 => Self::mov(self.b, &mut self.b),                     // MOV   B,B
-            0x41 => Self::mov(self.c, &mut self.b),                     // MOV   B,C
-            0x42 => Self::mov(self.d, &mut self.b),                     // MOV   B,D
-            0x43 => Self::mov(self.e, &mut self.b),                     // MOV   B,E
-            0x44 => Self::mov(self.h, &mut self.b),                     // MOV   B,H
-            0x45 => Self::mov(self.l, &mut self.b),                     // MOV   B,L
-            0x46 => Self::mov_m(self.m_val(), &mut self.b),             // MOV   B,M
-            0x47 => Self::mov(self.a, &mut self.b),                     // MOV   B,A
-            0x48 => Self::mov(self.b, &mut self.c),                     // MOV   C,B
-            0x49 => Self::mov(self.c, &mut self.c),                     // MOV   C,C
-            0x4A => Self::mov(self.d, &mut self.c),                     // MOV   C,D
-            0x4B => Self::mov(self.e, &mut self.c),                     // MOV   C,E
-            0x4C => Self::mov(self.h, &mut self.c),                     // MOV   C,H
-            0x4D => Self::mov(self.l, &mut self.c),                     // MOV   C,L
-            0x4E => Self::mov_m(self.m_val(), &mut self.c),             // MOV   C,M
-            0x4F => Self::mov(self.a, &mut self.c),                     // MOV   C,A
-            0x50 => Self::mov(self.b, &mut self.d),                     // MOV   D,B
-            0x51 => Self::mov(self.c, &mut self.d),                     // MOV   D,C
-            0x52 => Self::mov(self.d, &mut self.d),                     // MOV   D,D
-            0x53 => Self::mov(self.e, &mut self.d),                     // MOV   D,E
-            0x54 => Self::mov(self.h, &mut self.d),                     // MOV   D,H
-            0x55 => Self::mov(self.l, &mut self.d),                     // MOV   D,L
-            0x56 => Self::mov_m(self.m_val(), &mut self.d),             // MOV   D,M
-            0x57 => Self::mov(self.a, &mut self.d),                     // MOV   D,A
-            0x58 => Self::mov(self.b, &mut self.e),                     // MOV   E,B
-            0x59 => Self::mov(self.c, &mut self.e),                     // MOV   E,C
-            0x5A => Self::mov(self.d, &mut self.e),                     // MOV   E,D
-            0x5B => Self::mov(self.e, &mut self.e),                     // MOV   E,E
-            0x5C => Self::mov(self.h, &mut self.e),                     // MOV   E,H
-            0x5D => Self::mov(self.l, &mut self.e),                     // MOV   E,L
-            0x5E => Self::mov_m(self.m_val(), &mut self.e),             // MOV   E,M
-            0x5F => Self::mov(self.a, &mut self.e),                     // MOV   E,A
-            0x60 => Self::mov(self.b, &mut self.h),                     // MOV   H,B
-            0x61 => Self::mov(self.c, &mut self.h),                     // MOV   H,C
-            0x62 => Self::mov(self.d, &mut self.h),                     // MOV   H,D
-            0x63 => Self::mov(self.e, &mut self.h),                     // MOV   H,E
-            0x64 => Self::mov(self.h, &mut self.h),                     // MOV   H,H
-            0x65 => Self::mov(self.l, &mut self.h),                     // MOV   H,L
-            0x66 => Self::mov_m(self.m_val(), &mut self.h),             // MOV   H,M
-            0x67 => Self::mov(self.a, &mut self.h),                     // MOV   H,A
-            0x68 => Self::mov(self.b, &mut self.l),                     // MOV   L,B
-            0x69 => Self::mov(self.c, &mut self.l),                     // MOV   L,C
-            0x6A => Self::mov(self.d, &mut self.l),                     // MOV   L,D
-            0x6B => Self::mov(self.e, &mut self.l),                     // MOV   L,E
-            0x6C => Self::mov(self.h, &mut self.l),                     // MOV   L,H
-            0x6D => Self::mov(self.l, &mut self.l),                     // MOV   L,L
-            0x6E => Self::mov_m(self.m_val(), &mut self.l),             // MOV   L,M
-            0x6F => Self::mov(self.a, &mut self.l),                     // MOV   L,A
-            0x70 => Self::mov_m(self.b, &mut self.m_val_mut()),         // MOV   M,B
-            0x71 => Self::mov_m(self.c, &mut self.m_val_mut()),         // MOV   M,C
-            0x72 => Self::mov_m(self.d, &mut self.m_val_mut()),         // MOV   M,D
-            0x73 => Self::mov_m(self.e, &mut self.m_val_mut()),         // MOV   M,E
-            0x74 => Self::mov_m(self.h, &mut self.m_val_mut()),         // MOV   M,H
-            0x75 => Self::mov_m(self.l, &mut self.m_val_mut()),         // MOV   M,L
-            0x77 => Self::mov_m(self.a, &mut self.m_val_mut()),         // MOV   M,A
-            0x78 => Self::mov(self.b, &mut self.a),                     // MOV   A,B
-            0x79 => Self::mov(self.c, &mut self.a),                     // MOV   A,C
-            0x7A => Self::mov(self.d, &mut self.a),                     // MOV   A,D
-            0x7B => Self::mov(self.e, &mut self.a),                     // MOV   A,E
-            0x7C => Self::mov(self.h, &mut self.a),                     // MOV   A,H
-            0x7D => Self::mov(self.l, &mut self.a),                     // MOV   A,L
-            0x7E => Self::mov_m(self.m_val(), &mut self.a),             // MOV   A,M
-            0x7F => Self::mov_m(self.a, &mut self.a),                   // MOV   A,A
+            0x40 => mov!(self.b, self.b),                     // MOV   B,B
+            0x41 => mov!(self.c, self.b),                     // MOV   B,C
+            0x42 => mov!(self.d, self.b),                     // MOV   B,D
+            0x43 => mov!(self.e, self.b),                     // MOV   B,E
+            0x44 => mov!(self.h, self.b),                     // MOV   B,H
+            0x45 => mov!(self.l, self.b),                     // MOV   B,L
+            0x46 => mov!(self.m_val(), self.b, 2),             // MOV   B,M
+            0x47 => mov!(self.a, self.b),                     // MOV   B,A
+            0x48 => mov!(self.b, self.c),                     // MOV   C,B
+            0x49 => mov!(self.c, self.c),                     // MOV   C,C
+            0x4A => mov!(self.d, self.c),                     // MOV   C,D
+            0x4B => mov!(self.e, self.c),                     // MOV   C,E
+            0x4C => mov!(self.h, self.c),                     // MOV   C,H
+            0x4D => mov!(self.l, self.c),                     // MOV   C,L
+            0x4E => mov!(self.m_val(), self.c, 2),             // MOV   C,M
+            0x4F => mov!(self.a, self.c),                     // MOV   C,A
+            0x50 => mov!(self.b, self.d),                     // MOV   D,B
+            0x51 => mov!(self.c, self.d),                     // MOV   D,C
+            0x52 => mov!(self.d, self.d),                     // MOV   D,D
+            0x53 => mov!(self.e, self.d),                     // MOV   D,E
+            0x54 => mov!(self.h, self.d),                     // MOV   D,H
+            0x55 => mov!(self.l, self.d),                     // MOV   D,L
+            0x56 => mov!(self.m_val(), self.d, 2),             // MOV   D,M
+            0x57 => mov!(self.a, self.d),                     // MOV   D,A
+            0x58 => mov!(self.b, self.e),                     // MOV   E,B
+            0x59 => mov!(self.c, self.e),                     // MOV   E,C
+            0x5A => mov!(self.d, self.e),                     // MOV   E,D
+            0x5B => mov!(self.e, self.e),                     // MOV   E,E
+            0x5C => mov!(self.h, self.e),                     // MOV   E,H
+            0x5D => mov!(self.l, self.e),                     // MOV   E,L
+            0x5E => mov!(self.m_val(), self.e, 2),             // MOV   E,M
+            0x5F => mov!(self.a, self.e),                     // MOV   E,A
+            0x60 => mov!(self.b, self.h),                     // MOV   H,B
+            0x61 => mov!(self.c, self.h),                     // MOV   H,C
+            0x62 => mov!(self.d, self.h),                     // MOV   H,D
+            0x63 => mov!(self.e, self.h),                     // MOV   H,E
+            0x64 => mov!(self.h, self.h),                     // MOV   H,H
+            0x65 => mov!(self.l, self.h),                     // MOV   H,L
+            0x66 => mov!(self.m_val(), self.h, 2),             // MOV   H,M
+            0x67 => mov!(self.a, self.h),                     // MOV   H,A
+            0x68 => mov!(self.b, self.l),                     // MOV   L,B
+            0x69 => mov!(self.c, self.l),                     // MOV   L,C
+            0x6A => mov!(self.d, self.l),                     // MOV   L,D
+            0x6B => mov!(self.e, self.l),                     // MOV   L,E
+            0x6C => mov!(self.h, self.l),                     // MOV   L,H
+            0x6D => mov!(self.l, self.l),                     // MOV   L,L
+            0x6E => mov!(self.m_val(), self.l, 2),             // MOV   L,M
+            0x6F => mov!(self.a, self.l),                     // MOV   L,A
+            0x70 => mov!(self.b, *self.m_val_mut(), 2),         // MOV   M,B
+            0x71 => mov!(self.c, *self.m_val_mut(), 2),         // MOV   M,C
+            0x72 => mov!(self.d, *self.m_val_mut(), 2),         // MOV   M,D
+            0x73 => mov!(self.e, *self.m_val_mut(), 2),         // MOV   M,E
+            0x74 => mov!(self.h, *self.m_val_mut(), 2),         // MOV   M,H
+            0x75 => mov!(self.l, *self.m_val_mut(), 2),         // MOV   M,L
+            0x77 => mov!(self.a, *self.m_val_mut(), 2),         // MOV   M,A
+            0x78 => mov!(self.b, self.a),                     // MOV   A,B
+            0x79 => mov!(self.c, self.a),                     // MOV   A,C
+            0x7A => mov!(self.d, self.a),                     // MOV   A,D
+            0x7B => mov!(self.e, self.a),                     // MOV   A,E
+            0x7C => mov!(self.h, self.a),                     // MOV   A,H
+            0x7D => mov!(self.l, self.a),                     // MOV   A,L
+            0x7E => mov!(self.m_val(), self.a, 2),             // MOV   A,M
+            0x7F => mov!(self.a, self.a),                   // MOV   A,A
 
             // 16-bit load/store/move instructions
             0x01 => {                                                   // LXI   B,d16
@@ -313,50 +344,18 @@ impl CPU {
                 self.h = self.memory[adr + 1];
                 5
             }
-            0xC1 => {                                                   // POP   B
-                self.c = self.stack_pop();
-                self.b = self.stack_pop();
-                3
-            }
-            0xD1 => {                                                   // POP   D
-                self.e = self.stack_pop();
-                self.d = self.stack_pop();
-                3
-            }
-            0xE1 => {                                                   // POP   H
-                self.l = self.stack_pop();
-                self.h = self.stack_pop();
-                3
-            }
-            0xF1 => {                                                   // POP   PSW
-                self.flags = self.stack_pop();
-                self.a = self.stack_pop();
-                3
-            }
+            0xC1 => pop!(self.b, self.c),                                                   // POP  B
+            0xD1 => pop!(self.d, self.e),                                                   // POP  D
+            0xE1 => pop!(self.h, self.l),                                                   // POP  H
+            0xF1 => pop!(self.a, self.flags),                                               // POP  PSW
+            0xC5 => push!(self.b, self.c),                                                   // PUSH  B
+            0xD5 => push!(self.d, self.e),                                                   // PUSH  D
+            0xE5 => push!(self.h, self.l),                                                   // PUSH  H
+            0xF5 => push!(self.a, self.flags),                                               // PUSH  PSW
             0xE3 => {                                                   // XTHL
                 mem::swap(&mut self.h, &mut self.memory[self.sp + 1]);
                 mem::swap(&mut self.l, &mut self.memory[self.sp]);
                 5
-            }
-            0xC5 => {                                                   // PUSH  B
-                self.stack_push(self.b);
-                self.stack_push(self.c);
-                3
-            }
-            0xD5 => {                                                   // PUSH  D
-                self.stack_push(self.d);
-                self.stack_push(self.e);
-                3
-            }
-            0xE5 => {                                                   // PUSH  H
-                self.stack_push(self.h);
-                self.stack_push(self.l);
-                3
-            }
-            0xF5 => {                                                   // PUSH  PSW
-                self.stack_push(self.a);
-                self.stack_push(self.flags);
-                3
             }
             0xF9 => {                                                   // SPHL
                 self.sp = self.m();
@@ -651,26 +650,8 @@ impl CPU {
         3
     }
 
-    fn ret(&mut self) -> u32 {
-        self.pc = self.stack_pop_u16();
-        3
-    }
-
-    fn ret_if(&mut self, flag: u8) -> u32 {
-        if self.flag(flag) != 0 {
-            self.ret()
-        } else { 1 }
-    }
-
-    fn ret_if_not(&mut self, flag: u8) -> u32 {
-        if self.flag(flag) == 0 {
-            self.ret()
-        } else { 1 }
-    }
-
-    fn rst(&mut self, code: u8) -> u32 {
-        self.call((code as u16) << 3);
-        3
+    fn rst(&mut self, val: u8) -> u32 {
+        self.call((val as u16) << 3)
     }
 
     fn call(&mut self, adr: u16) -> u32 {
@@ -762,16 +743,6 @@ impl CPU {
         *lo = result_lo;
         *hi = hi.wrapping_sub(carry as u8);
         1
-    }
-
-    fn mov(from: u8, to: &mut u8) -> u32 {
-        *to = from;
-        1
-    }
-
-    fn mov_m(from: u8, to: &mut u8) -> u32 {
-        Self::mov(from, to);
-        2
     }
 
     fn stack_push(&mut self, val: u8) {

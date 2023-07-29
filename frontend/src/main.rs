@@ -50,6 +50,7 @@ fn run(program: &[u8]) -> Result<(), String> {
     let mut pixel_data = [0; (WIDTH * HEIGHT * 3) as usize];
 
     let mut emulator = Emulator::new(program);
+    let mut save_state: Option<Emulator> = None;
     let mut paused = false;
 
     let now = Instant::now();
@@ -62,10 +63,16 @@ fn run(program: &[u8]) -> Result<(), String> {
                 Event::KeyDown { keycode: Some(keycode), keymod, .. } if frontend::has_ctrl(keymod) => {
                     match keycode {
                         Keycode::Q => break 'main,
+                        Keycode::S => save_state = Some(emulator.clone()),
+                        Keycode::D => {
+                            if let Some(state) = &save_state {
+                                emulator = state.clone();
+                            }
+                        }
                         Keycode::R => {
                             emulator.cpu_mut().reset();
                             audio.stop_all();
-                        },
+                        }
                         _ => {}
                     };
                 }
@@ -83,7 +90,7 @@ fn run(program: &[u8]) -> Result<(), String> {
             while cycles < CYCLES_PER_FRAME {
                 let status = emulator.step().map_err(|e| e.to_string())?;
                 match status {
-                    ExecutionStatus::Continue(c) => cycles += c,
+                    ExecutionStatus::Continue(c) => cycles += c * 4,
                     ExecutionStatus::Halt => break,
                 }
 
