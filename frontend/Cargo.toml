@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 core = { path = "../core" }
-sdl2 = { version = "0.35.2", features = ["bundled", "static-link"] }
+sdl2 = "0.37.0"
 colored = "2.0.0"
 spin_sleep = "1.1.1"
 
