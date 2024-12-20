@@ -39,7 +39,9 @@ impl IndexMut<u16> for Memory {
         let rom_len = self.rom.len();
         let index = index as usize;
 
-        if index < rom_len { panic!("cannot write to ROM"); }
+        if index < rom_len {
+            panic!("cannot write to ROM");
+        }
 
         &mut self.ram[(index - rom_len) % self.ram.len()]
     }

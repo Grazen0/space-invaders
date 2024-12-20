@@ -1,6 +1,6 @@
 use sdl2::keyboard::Keycode;
 
-use core::{Emulator, Button};
+use crate::core::{emulator::Emulator, Button};
 
 pub fn handle_keydown(keycode: Keycode, emulator: &mut Emulator) {
     if let Some(button) = map_keycode(keycode) {
@@ -25,6 +25,7 @@ fn map_keycode(keycode: Keycode) -> Option<Button> {
         Keycode::A => Button::P2Left,
         Keycode::D => Button::P2Right,
         Keycode::W | Keycode::Space => Button::P2Shoot,
+        Keycode::T => Button::Tilt,
         _ => return None,
     })
 }

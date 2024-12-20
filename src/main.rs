@@ -1,16 +1,19 @@
 #![windows_subsystem = "windows"]
 
-use std::time::{Duration, Instant};
+use audio::AudioManager;
 use colored::Colorize;
+use core::emulator::{Emulator, Event as EmulatorEvent, ExecutionStatus, Sound};
+use misc::{HEIGHT, WIDTH};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
+use std::time::{Duration, Instant};
 
-use core::{Emulator, ExecutionStatus, EmulatorEvent, Sound};
-use frontend::input;
-use frontend::{WIDTH, HEIGHT};
-use frontend::audio::AudioManager;
+mod audio;
+mod core;
+mod input;
+mod misc;
 
 const SCALE_X: f32 = 2.0;
 const SCALE_Y: f32 = 2.5;
@@ -20,24 +23,31 @@ const CYCLES_PER_FRAME: u32 = (2_000_000.0 / FPS) as u32;
 fn main() {
     let program = include_bytes!("../assets/invaders");
 
-    run(program).unwrap_or_else(|e| {
-        eprintln!("{} {}", "Error:".red().bold(), e.to_string().red())
-    });
+    run(program).unwrap_or_else(|e| eprintln!("{} {}", "Error:".red().bold(), e.to_string().red()));
 }
 
 fn run(program: &[u8]) -> Result<(), String> {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let window = video_subsystem
-        .window("Space Invaders", (WIDTH as f32 * SCALE_X) as u32, (HEIGHT as f32 * SCALE_Y) as u32)
+        .window(
+            "Space Invaders",
+            (WIDTH as f32 * SCALE_X) as u32,
+            (HEIGHT as f32 * SCALE_Y) as u32,
+        )
         .position_centered()
-        .build().expect("could not build window");
+        .build()
+        .expect("could not build window");
 
     let audio_subsystem = sdl_context.audio()?;
     let mut audio = AudioManager::new(audio_subsystem)?;
 
     let mut event_pump = sdl_context.event_pump()?;
-    let mut canvas = window.into_canvas().present_vsync().build().expect("could not build renderer");
+    let mut canvas = window
+        .into_canvas()
+        .present_vsync()
+        .build()
+        .expect("could not build renderer");
 
     canvas.set_scale(SCALE_X, SCALE_Y)?;
     canvas.present();
@@ -60,7 +70,11 @@ fn run(program: &[u8]) -> Result<(), String> {
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. } => break 'main,
-                Event::KeyDown { keycode: Some(keycode), keymod, .. } if frontend::has_ctrl(keymod) => {
+                Event::KeyDown {
+                    keycode: Some(keycode),
+                    keymod,
+                    ..
+                } if misc::has_ctrl(keymod) => {
                     match keycode {
                         Keycode::Q => break 'main,
                         Keycode::S => save_state = Some(emulator.clone()),
@@ -76,9 +90,16 @@ fn run(program: &[u8]) -> Result<(), String> {
                         _ => {}
                     };
                 }
-                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => paused = !paused,
-                Event::KeyDown { keycode: Some(k), .. } => input::handle_keydown(k, &mut emulator),
-                Event::KeyUp { keycode: Some(k), .. } => input::handle_keyup(k, &mut emulator),
+                Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => paused = !paused,
+                Event::KeyDown {
+                    keycode: Some(k), ..
+                } => input::handle_keydown(k, &mut emulator),
+                Event::KeyUp {
+                    keycode: Some(k), ..
+                } => input::handle_keyup(k, &mut emulator),
                 _ => {}
             }
         }
@@ -113,9 +134,19 @@ fn run(program: &[u8]) -> Result<(), String> {
             emulator.cpu_mut().interrupt(2); // VBlank interrupt
         }
 
-        if frontend::update_pixel_data(&mut pixel_data, emulator.video_ram()) {
-            texture.update(None, &pixel_data, HEIGHT as usize * 3).unwrap();
-            canvas.copy_ex(&texture, None, Rect::from_center(canvas.viewport().center(), HEIGHT, WIDTH), -90.0, None, false, false)?;
+        if misc::update_pixel_data(&mut pixel_data, emulator.video_ram()) {
+            texture
+                .update(None, &pixel_data, HEIGHT as usize * 3)
+                .unwrap();
+            canvas.copy_ex(
+                &texture,
+                None,
+                Rect::from_center(canvas.viewport().center(), HEIGHT, WIDTH),
+                -90.0,
+                None,
+                false,
+                false,
+            )?;
             canvas.present();
         }
 

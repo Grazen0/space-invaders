@@ -1,5 +1,12 @@
 use std::mem;
-use crate::{concat_u16, Result, Error, CPU, CPUEvent, Button};
+
+use crate::concat_u16;
+
+use super::{
+    cpu::{Event as CPUEvent, CPU},
+    error::{Error, Result},
+    Button,
+};
 
 macro_rules! check_sound_events {
     ( $last_port:expr, $val:expr, $ev:expr, $(($msk:expr,$snd:expr)),* ) => {
@@ -23,7 +30,6 @@ pub enum ExecutionStatus {
 pub enum Event {
     PlaySound(Sound),
     StopSound(Sound),
-    Debug(u8),
 }
 
 #[derive(Debug, Clone)]
@@ -94,9 +100,11 @@ impl Emulator {
 
     pub fn button_press(&mut self, button: Button) {
         let mask = button.mask();
+
         match button {
+            Button::Tilt => self.reset(),
             Button::Coin => self.input_1 &= !mask,
-            Button::Tilt | Button::P2Shoot | Button::P2Left | Button::P2Right => self.input_2 |= mask,
+            Button::P2Shoot | Button::P2Left | Button::P2Right => self.input_2 |= mask,
             _ => self.input_1 |= mask,
         }
     }
@@ -105,7 +113,9 @@ impl Emulator {
         let mask = button.mask();
         match button {
             Button::Coin => self.input_1 |= mask,
-            Button::Tilt | Button::P2Shoot | Button::P2Left | Button::P2Right => self.input_2 &= !mask,
+            Button::Tilt | Button::P2Shoot | Button::P2Left | Button::P2Right => {
+                self.input_2 &= !mask
+            }
             _ => self.input_1 &= !mask,
         }
     }
@@ -123,7 +133,10 @@ impl Emulator {
             2 => self.shift_offset = val & 0x7,
             3 => {
                 if val != self.last_port_3 {
-                    check_sound_events!(self.last_port_3, val, self.event,
+                    check_sound_events!(
+                        self.last_port_3,
+                        val,
+                        self.event,
                         (0x01, Sound::UFO),
                         (0x02, Sound::Shoot),
                         (0x04, Sound::PlayerDie),
@@ -138,7 +151,10 @@ impl Emulator {
             }
             5 => {
                 if val != self.last_port_5 {
-                    check_sound_events!(self.last_port_5, val, self.event,
+                    check_sound_events!(
+                        self.last_port_5,
+                        val,
+                        self.event,
                         (0x01, Sound::Bomp1),
                         (0x02, Sound::Bomp2),
                         (0x04, Sound::Bomp3),
@@ -148,8 +164,8 @@ impl Emulator {
                     self.last_port_5 = val;
                 }
             }
-            6 => self.event = Some(Event::Debug(val)),
-            _ => return Err(Error::InvalidWritePort { port })
+            6 => {} // Watchdog, not necessary to implement
+            _ => return Err(Error::InvalidWritePort { port }),
         }
 
         Ok(())
@@ -163,7 +179,7 @@ impl Emulator {
                 let shift_val = concat_u16!(self.shift_hi, self.shift_lo);
                 ((shift_val >> (8 - self.shift_offset)) & 0xFF) as u8
             }
-            _ => return Err(Error::InvalidReadPort { port })
+            _ => return Err(Error::InvalidReadPort { port }),
         })
     }
 }

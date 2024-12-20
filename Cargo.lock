@@ -37,21 +37,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "core"
-version = "0.1.0"
-
-[[package]]
-name = "frontend"
-version = "0.1.0"
-dependencies = [
- "colored",
- "core",
- "sdl2",
- "spin_sleep",
- "winres",
-]
-
-[[package]]
 name = "hermit-abi"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -106,6 +91,16 @@ name = "serde"
 version = "1.0.136"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce31e24b01e1e524df96f1c2fdd054405f8d7376249a5110886fb4b658484789"
+
+[[package]]
+name = "space-invaders"
+version = "0.1.0"
+dependencies = [
+ "colored",
+ "sdl2",
+ "spin_sleep",
+ "winres",
+]
 
 [[package]]
 name = "spin_sleep"

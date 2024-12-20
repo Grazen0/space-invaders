@@ -1,5 +1,12 @@
-[workspace]
-members = [
-    "core",
-    "frontend"
-]
+[package]
+name = "space-invaders"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sdl2 = "0.37.0"
+colored = "2.0.0"
+spin_sleep = "1.1.1"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1.12"

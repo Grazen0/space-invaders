@@ -1,13 +1,8 @@
-mod cpu;
-mod memory;
-mod error;
-mod macros;
-mod emulator;
-
-pub use error::{Result, Error};
-pub use cpu::{CPU, Event as CPUEvent};
-pub use emulator::{Emulator, ExecutionStatus, Event as EmulatorEvent, Sound};
-pub use memory::Memory;
+pub mod cpu;
+pub mod emulator;
+pub mod error;
+pub mod macros;
+pub mod memory;
 
 #[derive(Debug, Clone)]
 pub enum Button {

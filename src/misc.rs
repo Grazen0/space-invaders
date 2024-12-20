@@ -1,6 +1,3 @@
-pub mod input;
-pub mod audio;
-
 use sdl2::keyboard::Mod;
 use sdl2::pixels::Color;
 
@@ -31,7 +28,10 @@ pub fn update_pixel_data(pixel_data: &mut [u8], video_ram: &[u8]) -> bool {
 
             let (r, g, b) = color.rgb();
 
-            if pixel_data[data_index] != r || pixel_data[data_index + 1] != g || pixel_data[data_index + 2] != b {
+            if pixel_data[data_index] != r
+                || pixel_data[data_index + 1] != g
+                || pixel_data[data_index + 2] != b
+            {
                 pixel_data[data_index + 0] = r;
                 pixel_data[data_index + 1] = g;
                 pixel_data[data_index + 2] = b;
