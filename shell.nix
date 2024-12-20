@@ -1,6 +1,10 @@
 {pkgs ? import <nixpkgs> {}}:
 pkgs.mkShell {
-  nativeBuildInputs = with pkgs.buildPackages; [
-    SDL2
+  inputsFrom = [(pkgs.callPackage ./default.nix {})];
+
+  buildInputs = with pkgs; [
+    rust-analyzer
+    rustfmt
+    clippy
   ];
 }
