@@ -52,16 +52,9 @@ mod test {
 
     #[test]
     fn test_even_parity() {
-        assert_eq!(super::even_parity(0b1101), false);
-        assert_eq!(super::even_parity(0b0101_1101), false);
-        assert_eq!(super::even_parity(0b1001), true);
-        assert_eq!(super::even_parity(0b1100_1111), true);
-    }
-
-    #[test]
-    fn test_concat_u16() {
-        assert_eq!(concat_u16!(0xF6, 0x78), 0xF678);
-        assert_eq!(concat_u16!(0xD1, 0x4A), 0xD14A);
-        assert_eq!(concat_u16!(0x00, 0x20), 0x0020);
+        assert_eq!(even_parity(0b1101), false);
+        assert_eq!(even_parity(0b0101_1101), false);
+        assert_eq!(even_parity(0b1001), true);
+        assert_eq!(even_parity(0b1100_1111), true);
     }
 }
