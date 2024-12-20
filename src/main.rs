@@ -84,7 +84,7 @@ fn run(program: &[u8]) -> Result<(), String> {
                             }
                         }
                         Keycode::R => {
-                            emulator.cpu_mut().reset();
+                            emulator.reset();
                             audio.stop_all();
                         }
                         _ => {}
