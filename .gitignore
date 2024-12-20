@@ -1,5 +1,8 @@
 /.idea
 /target
 
+# `nix build` output
+/result
+
 .direnv/
 .envrc
