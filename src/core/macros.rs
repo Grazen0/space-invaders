@@ -6,7 +6,7 @@ macro_rules! concat_u16 {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     #[test]
     fn test_concat_u16() {
         assert_eq!(concat_u16!(0xF6, 0x78), 0xF678);

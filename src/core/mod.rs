@@ -47,7 +47,7 @@ pub fn even_parity(mut n: u8) -> bool {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]
